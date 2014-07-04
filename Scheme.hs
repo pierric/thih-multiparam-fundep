@@ -17,6 +17,7 @@ import Kind
 import Type
 import Subst
 import Pred
+import TIMonad
 import PPrint
 
 data Scheme = Forall [Kind] (Qual Type)
@@ -39,4 +40,7 @@ quantify vs qt = Forall ks (apply s qt)
 toScheme      :: Type -> Scheme
 toScheme t     = Forall [] ([] :=> t)
 
+freshInst               :: Scheme -> TI (Qual Type)
+freshInst (Forall ks qt) = do ts <- mapM newTVar ks
+                              return (inst ts qt)
 -----------------------------------------------------------------------------

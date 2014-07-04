@@ -13,7 +13,7 @@
 -----------------------------------------------------------------------------
 
 module TIMain where
-import List( (\\), intersect, union, partition )
+import Data.List( (\\), intersect, union, partition )
 import Id
 import Kind
 import Type

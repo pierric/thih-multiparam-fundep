@@ -13,7 +13,7 @@
 -----------------------------------------------------------------------------
 
 module Unify where
-import Monad(foldM)
+import Control.Monad(foldM)
 import Kind
 import Type
 import Subst

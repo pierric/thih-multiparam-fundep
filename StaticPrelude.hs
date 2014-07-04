@@ -156,7 +156,7 @@ hugs_ReturnCfun
 -- just defines the member functions and instances.
 
 preludeClasses =   addPreludeClasses
-               <:> addClass cIx asig [IsIn cOrd [atype]]
+               <:> addClass cIx asig [IsIn cOrd [atype]] []
                <:> instances (instsEq ++ instsOrd ++ instsBounded ++
                               instsEnum ++ instsRead ++ instsShow ++
                               instsIx ++

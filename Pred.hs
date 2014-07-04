@@ -13,13 +13,14 @@
 -----------------------------------------------------------------------------
 
 module Pred where
-import List(union,(\\))
-import Monad(msum)
+import Data.List(union,(\\))
+import Control.Monad(msum)
 import Id
 import Kind
 import Type
 import Subst
 import Unify
+import TIMonad
 import PPrint
 
 data Qual t = [Pred] :=> t
@@ -51,13 +52,21 @@ instance Unify Pred where
 
 instance Match Pred where
    match = lift match
+   
+instance Instantiate t => Instantiate (Qual t) where
+  inst ts (ps :=> t) = inst ts ps :=> inst ts t
+  
+instance Instantiate Pred where
+  inst ts (IsIn c t) = IsIn c (inst ts t)
 
 lift m (IsIn i ts) (IsIn i' ts')
          | i == i'   = m ts ts'
          | otherwise = fail "classes differ"
 
-type Class    = ([Tyvar], [Pred], [Inst])
-type Inst     = Qual Pred
+data FunDep = [Int] :~> [Int]
+         
+type Class    = ([Tyvar], [Pred], [Inst], [FunDep])
+data Inst     = InstanceScheme [Kind] (Qual Pred)
 
 -----------------------------------------------------------------------------
 
@@ -65,13 +74,16 @@ data ClassEnv = ClassEnv { classes  :: Id -> Maybe Class,
                            defaults :: [Type] }
 
 sig       :: ClassEnv -> Id -> [Tyvar]
-sig ce i   = case classes ce i of Just (vs, is, its) -> vs
+sig ce i   = case classes ce i of Just (vs, is, its, fds) -> vs
 
 super     :: ClassEnv -> Id -> [Pred]
-super ce i = case classes ce i of Just (vs, is, its) -> is
+super ce i = case classes ce i of Just (vs, is, its, fds) -> is
 
 insts     :: ClassEnv -> Id -> [Inst]
-insts ce i = case classes ce i of Just (vs, is, its) -> its
+insts ce i = case classes ce i of Just (vs, is, its, fds) -> its
+
+fundeps     :: ClassEnv -> Id -> [FunDep]
+fundeps ce i = case classes ce i of Just (vs, is, its, fds) -> fds
 
 defined :: Maybe a -> Bool
 defined (Just x) = True
@@ -92,11 +104,11 @@ infixr 5 <:>
 (f <:> g) ce = do ce' <- f ce
                   g ce'
 
-addClass                              :: Id -> [Tyvar] -> [Pred] -> EnvTransformer
-addClass i vs ps ce
+addClass                              :: Id -> [Tyvar] -> [Pred] -> [FunDep] -> EnvTransformer
+addClass i vs ps fds ce 
  | defined (classes ce i)              = fail "class already defined"
  | any (not . defined . classes ce . predHead) ps = fail "superclass not defined"
- | otherwise                           = return (modify ce i (vs, ps, []))
+ | otherwise                           = return (modify ce i (vs, ps, [], fds))
 
 addPreludeClasses :: EnvTransformer
 addPreludeClasses  = addCoreClasses <:> addNumClasses
@@ -110,50 +122,54 @@ mtype  = TVar mtyvar
 msig   = [mtyvar]
 
 addCoreClasses ::   EnvTransformer
-addCoreClasses  =   addClass "Eq" asig []
-                <:> addClass "Ord" asig [IsIn "Eq" [atype]]
-                <:> addClass "Show" asig []
-                <:> addClass "Read" asig []
-                <:> addClass "Bounded" asig []
-                <:> addClass "Enum" asig []
-                <:> addClass "Functor" msig []
-                <:> addClass "Monad" msig []
+addCoreClasses  =   addClass "Eq" asig [] []
+                <:> addClass "Ord" asig [IsIn "Eq" [atype]] []
+                <:> addClass "Show" asig [] []
+                <:> addClass "Read" asig [] []
+                <:> addClass "Bounded" asig [] []
+                <:> addClass "Enum" asig [] []
+                <:> addClass "Functor" msig [] []
+                <:> addClass "Monad" msig [] []
 
 addNumClasses  ::   EnvTransformer
 addNumClasses   =   addClass "Num" asig [IsIn "Eq" [atype],
-                                         IsIn "Show" [atype]]
+                                         IsIn "Show" [atype]] 
+                                        []
                 <:> addClass "Real" asig [IsIn "Num" [atype],
                                           IsIn "Ord" [atype]]
-                <:> addClass "Fractional" asig [IsIn "Num" [atype]]
+                                         []
+                <:> addClass "Fractional" asig [IsIn "Num" [atype]] []
                 <:> addClass "Integral" asig [IsIn "Real" [atype],
                                               IsIn "Enum" [atype]]
+                                             []
                 <:> addClass "RealFrac" asig [IsIn "Real" [atype],
                                               IsIn "Fractional" [atype]]
-                <:> addClass "Floating" asig [IsIn "Fractional" [atype]]
+                                             []
+                <:> addClass "Floating" asig [IsIn "Fractional" [atype]] []
                 <:> addClass "RealFloat" asig [IsIn "RealFrac" [atype],
                                                IsIn "Floating" [atype]]
+                                              []
 
-addInst                        :: [Pred] -> Pred -> EnvTransformer
-addInst ps p@(IsIn i _) ce
+addInst                        :: [Kind] -> [Pred] -> Pred -> EnvTransformer
+addInst ks ps p@(IsIn i _) ce
  | not (defined (classes ce i)) = fail "no class for instance"
  | any (overlap p) qs           = fail "overlapping instance"
  | otherwise                    = return (modify ce i c)
    where its = insts ce i
-         qs  = [ q | (_ :=> q) <- its ]
-         c   = (sig ce i, super ce i, (ps:=>p) : its)
+         qs  = [ q | InstanceScheme _ (_ :=> q) <- its ]
+         c   = (sig ce i, super ce i, InstanceScheme ks (ps:=>p) : its, fundeps ce i)
 
 overlap       :: Pred -> Pred -> Bool
 overlap p q    = defined (mgu p q)
 
 exampleInsts ::  EnvTransformer
 exampleInsts =   addPreludeClasses
-             <:> addInst [] (IsIn "Ord" [tUnit])
-             <:> addInst [] (IsIn "Ord" [tChar])
-             <:> addInst [] (IsIn "Ord" [tInt])
-             <:> addInst [IsIn "Ord" [TVar (Tyvar "a" Star)],
-                          IsIn "Ord" [TVar (Tyvar "b" Star)]]
-                         (IsIn "Ord" [pair (TVar (Tyvar "a" Star))
-                                           (TVar (Tyvar "b" Star))])
+             <:> addInst [] [] (IsIn "Ord" [tUnit])
+             <:> addInst [] [] (IsIn "Ord" [tChar])
+             <:> addInst [] [] (IsIn "Ord" [tInt])
+             <:> addInst [Star,Star] 
+                         [IsIn "Ord" [TGen 0], IsIn "Ord" [TGen 1]]
+                         (IsIn "Ord" [pair (TGen 0) (TGen 1)])
 
 -----------------------------------------------------------------------------
 
@@ -165,8 +181,11 @@ bySuper ce p@(IsIn i ts)
 
 byInst                   :: ClassEnv -> Pred -> Maybe [Pred]
 byInst ce p@(IsIn i t)    = msum [ tryInst it | it <- insts ce i ]
- where tryInst (ps :=> h) = do u <- match h p
-                               Just (map (apply u) ps)
+ where tryInst (InstanceScheme vs it) = do 
+           let tyvars = map (\(ind,kind) -> TVar (Tyvar [ind] kind)) (zip ['a'..'z'] vs)
+               (ps :=> h) = inst tyvars it
+           u <- match h p
+           Just (map (apply u) ps)
 
 entail        :: ClassEnv -> [Pred] -> Pred -> Bool
 entail ce ps p = any (p `elem`) (map (bySuper ce) ps) ||

@@ -34,13 +34,14 @@ import TIMonad
 isIn1       :: Id -> Type -> Pred
 isIn1 i t    = IsIn i [t]
 
-mkInst      :: Instantiate a => [Kind] -> a -> a
-mkInst ks = inst ts 
- where ts   = zipWith (\v k -> TVar (Tyvar v k)) vars ks
-       vars = [ [c] | c <-['a'..'z'] ] ++
-              [ c : show n | n <-[0::Int ..], c<-['a'..'z'] ]
+--mkInst      :: Instantiate a => [Kind] -> a -> a
+--mkInst ks = inst ts 
+-- where ts   = zipWith (\v k -> TVar (Tyvar v k)) vars ks
+--       vars = [ [c] | c <-['a'..'z'] ] ++
+--              [ c : show n | n <-[0::Int ..], c<-['a'..'z'] ]
+mkInst = InstanceScheme
 
 instances  :: [Inst] -> EnvTransformer
-instances   = foldr1 (<:>) . map (\(ps:=>p) -> addInst ps p)
+instances   = foldr1 (<:>) . map (\(InstanceScheme ks (ps:=>p)) -> addInst ks ps p)
 
 -----------------------------------------------------------------------------

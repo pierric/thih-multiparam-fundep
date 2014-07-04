@@ -18,8 +18,6 @@ import Kind
 import Type
 import Subst
 import Unify
-import Pred
-import Scheme
 
 newtype TI a = TI (Subst -> Int -> (Subst, Int, a))
 
@@ -53,10 +51,6 @@ newTVar    :: Kind -> TI Type
 newTVar k   = TI (\s n -> let v = Tyvar (enumId n) k
                           in  (s, n+1, TVar v))
 
-freshInst               :: Scheme -> TI (Qual Type)
-freshInst (Forall ks qt) = do ts <- mapM newTVar ks
-                              return (inst ts qt)
-
 class Instantiate t where
   inst  :: [Type] -> t -> t
 instance Instantiate Type where
@@ -65,9 +59,5 @@ instance Instantiate Type where
   inst ts t         = t
 instance Instantiate a => Instantiate [a] where
   inst ts = map (inst ts)
-instance Instantiate t => Instantiate (Qual t) where
-  inst ts (ps :=> t) = inst ts ps :=> inst ts t
-instance Instantiate Pred where
-  inst ts (IsIn c t) = IsIn c (inst ts t)
 
 -----------------------------------------------------------------------------
