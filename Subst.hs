@@ -1,5 +1,5 @@
 -----------------------------------------------------------------------------
--- Subst:	Substitutions
+-- Subst: Substitutions
 -- 
 -- Part of `Typing Haskell in Haskell', version of November 23, 2000
 -- Copyright (c) Mark P Jones and the Oregon Graduate Institute
@@ -14,22 +14,32 @@
 
 module Subst where
 import Type
+import PPrint
 import Data.List(nub, intersect, union)
+import Data.Monoid
+import Control.Monad.Identity
 
-type Subst  = [(Tyvar, Type)]
+newtype Subst  = S { unS :: [(Tyvar, Type)] }
 
 nullSubst  :: Subst
-nullSubst   = []
+nullSubst   = S []
 
 (+->)      :: Tyvar -> Type -> Subst
-u +-> t     = [(u, t)]
+u +-> t     = S [(u, t)]
+
+instance Monoid Subst where
+  mempty        = nullSubst
+  mappend s1 s2 = runIdentity $ merge s1 s2
+
+instance PPrint Subst where
+  pprint = pprint . unS
 
 class Types t where
   apply :: Subst -> t -> t
   tv    :: t -> [Tyvar]
 
 instance Types Type where
-  apply s (TVar u)  = case lookup u s of
+  apply s (TVar u)  = case lookup u (unS s) of
                        Just t  -> t
                        Nothing -> TVar u
   apply s (TAp l r) = TAp (apply s l) (apply s r)
@@ -45,11 +55,11 @@ instance Types a => Types [a] where
 
 infixr 4 @@
 (@@)       :: Subst -> Subst -> Subst
-s1 @@ s2    = [ (u, apply s1 t) | (u,t) <- s2 ] ++ s1
+s1 @@ s2    = S $ [ (u, apply s1 t) | (u,t) <- unS s2 ] ++ unS s1
 
 merge      :: Monad m => Subst -> Subst -> m Subst
-merge s1 s2 = if agree then return (s1++s2) else fail "merge fails"
+merge s1 s2 = if agree then return (S $ unS s1++unS s2) else fail "merge fails"
  where agree = all (\v -> apply s1 (TVar v) == apply s2 (TVar v))
-                   (map fst s1 `intersect` map fst s2)
+                   (map fst (unS s1) `intersect` map fst (unS s2))
 
 -----------------------------------------------------------------------------

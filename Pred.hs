@@ -177,7 +177,7 @@ bySuper :: ClassEnv -> Pred -> [Pred]
 bySuper ce p@(IsIn i ts)
  = p : concat (map (bySuper ce) supers)
    where supers = apply s (super ce i)
-         s      = zip (sig ce i) ts
+         s      = S $ zip (sig ce i) ts
 
 byInst                   :: ClassEnv -> Pred -> Maybe [Pred]
 byInst ce p@(IsIn i t)    = msum [ tryInst it | it <- insts ce i ]

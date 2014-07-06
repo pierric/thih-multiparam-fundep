@@ -40,9 +40,9 @@ unify t1 t2 = do s <- getSubst
 
 trim       :: [Tyvar] -> TI ()
 trim vs     = TI (\s n ->
-                  let s' = [ (v,t) | (v,t) <-s, v `elem` vs ]
+                  let s' = [ (v,t) | (v,t) <- unS s, v `elem` vs ]
                       force = length (tv (map snd s'))
-                  in  force `seq` (s', n, ()))
+                  in  force `seq` (S s', n, ()))
 
 extSubst   :: Subst -> TI ()
 extSubst s' = TI (\s n -> (s'@@s, n, ()))

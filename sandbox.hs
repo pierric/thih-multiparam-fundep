@@ -39,7 +39,10 @@ ce  = fromJust $ cet initialEnv
 
 ut1 = resolve ce (IsIn "C" [s tyvar_c, tInt, tyvar_c])
 ut2 = resolve ce (IsIn "A" [t2, t3, tyvar_c])
-ut3 = resolve ce (IsIn "M" [t3, t2, tyvar_c])
+ut3 = resolve ce (IsIn "M" [t0, t2, tyvar_c])
+ut4 = resolve ce (IsIn "M" [t1, t2, tyvar_c])
+ut5 = resolve ce (IsIn "M" [t2, t2, tyvar_c])
+ut6 = resolve ce (IsIn "M" [t3, t2, tyvar_c])
 
 ce2 = fromJust $ cet initialEnv
   where 
@@ -57,6 +60,7 @@ ce2 = fromJust $ cet initialEnv
                       [IsIn "A" [TGen 2, TGen 1, TGen 3],
                        IsIn "M" [TGen 0, TGen 1, TGen 2]]
                       (IsIn "M" [s (TGen 0), TGen 1, TGen 3])
-          <:> addClass "C" [tva,tvb,tvc] [] [[0]:~>[1,2]]
+          <:> addClass "C" [tva,tvb,tvc] [] [[0]:~>[1,2],[1]:~>[0]]
           <:> addInst [Star] [] (IsIn "C" [s (TGen 0), TGen 0, TGen 0])
-ut4 = resolve ce2 (IsIn "M" [t3, t2, tyvar_c])
+utB1 = resolve ce2 (IsIn "M" [t3, t2, tyvar_c])
+utB2 = resolve ce2 (IsIn "C" [s tyvar_c, tInt, tyvar_c])
